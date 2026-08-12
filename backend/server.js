@@ -1,41 +1,40 @@
-const express = require("express");
-const cors = require("cors");
-const dotenv = require("dotenv");
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
 
-const connectDB = require("./config/db");
+import connectDB from "./config/db.js";
 
-const roomRoutes = require("./routes/roomRoutes");
-const guestRoutes = require("./routes/guestRoutes");
-const bookingRoutes = require("./routes/bookingRoutes");
+import guestRoutes from "./routes/guestRoutes.js";
+import roomRoutes from "./routes/roomRoutes.js";
+import bookingRoutes from "./routes/bookingRoutes.js";
 
 dotenv.config();
 
-connectDB();
-
 const app = express();
+
+connectDB();
 
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://hotel-management-xxxx.vercel.app",
-    ],
+    origin: "https://hotel-management-rho-brown.vercel.app",
+    credentials: true,
   }),
 );
+
 app.use(express.json());
 
 app.get("/", (req, res) => {
   res.json({
-    message: "HotelPro API is running",
+    message: "Hotel Management API is running",
   });
 });
 
-app.use("/api/rooms", roomRoutes);
 app.use("/api/guests", guestRoutes);
+app.use("/api/rooms", roomRoutes);
 app.use("/api/bookings", bookingRoutes);
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
