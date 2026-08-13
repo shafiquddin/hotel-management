@@ -7,21 +7,57 @@ import connectDB from "./config/db.js";
 import guestRoutes from "./routes/guestRoutes.js";
 import roomRoutes from "./routes/roomRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
 
 dotenv.config();
 
 const app = express();
 
+// ==============================
+// DATABASE
+// ==============================
+
 connectDB();
+
+// ==============================
+// CORS
+// ==============================
+
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  process.env.CLIENT_URL,
+].filter(Boolean);
 
 app.use(
   cors({
-    origin: "https://hotel-management-rho-brown.vercel.app",
+    origin: (origin, callback) => {
+      // Allow requests without an origin
+      // e.g. Postman
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS blocked: ${origin}`));
+    },
     credentials: true,
   }),
 );
 
+// ==============================
+// MIDDLEWARE
+// ==============================
+
 app.use(express.json());
+
+// ==============================
+// API
+// ==============================
 
 app.get("/", (req, res) => {
   res.json({
@@ -29,9 +65,19 @@ app.get("/", (req, res) => {
   });
 });
 
-app.use("/api/guests", guestRoutes);
+app.use("/api/auth", authRoutes);
+
+app.use("/api/users", userRoutes);
+
 app.use("/api/rooms", roomRoutes);
+
+app.use("/api/guests", guestRoutes);
+
 app.use("/api/bookings", bookingRoutes);
+
+// ==============================
+// SERVER
+// ==============================
 
 const PORT = process.env.PORT || 5000;
 

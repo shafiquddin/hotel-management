@@ -14,11 +14,14 @@ import {
   constructOutline,
 } from "ionicons/icons";
 
-function Rooms({ rooms, setRooms }) {
+function Rooms({ rooms = [], setRooms }) {
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
   const [editingRoom, setEditingRoom] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const safeRooms = Array.isArray(rooms) ? rooms : [];
 
   const [form, setForm] = useState({
     number: "",
@@ -27,9 +30,10 @@ function Rooms({ rooms, setRooms }) {
     status: "Available",
   });
 
-  // =========================
-  // HANDLE INPUT CHANGE
-  // =========================
+  // ==========================================
+  // HANDLE INPUT
+  // ==========================================
+
   const handleChange = (e) => {
     const { name, value } = e.target;
 
@@ -39,9 +43,10 @@ function Rooms({ rooms, setRooms }) {
     }));
   };
 
-  // =========================
+  // ==========================================
   // RESET FORM
-  // =========================
+  // ==========================================
+
   const resetForm = () => {
     setForm({
       number: "",
@@ -53,130 +58,199 @@ function Rooms({ rooms, setRooms }) {
     setEditingRoom(null);
   };
 
-  // =========================
+  // ==========================================
   // OPEN ADD FORM
-  // =========================
+  // ==========================================
+
   const openAddForm = () => {
+    if (loading) return;
+
     resetForm();
     setShowForm(true);
   };
 
-  // =========================
+  // ==========================================
   // OPEN EDIT FORM
-  // =========================
+  // ==========================================
+
   const openEditForm = (room) => {
+    if (loading || !room?._id) return;
+
     setForm({
-      number: room.number?.toString() || "",
-      type: room.type || "Standard",
-      price: room.price?.toString() || "",
-      status: room.status || "Available",
+      number: room?.number?.toString() || "",
+      type: room?.type || "Standard",
+      price:
+        room?.price !== undefined && room?.price !== null
+          ? room.price.toString()
+          : "",
+      status: room?.status || "Available",
     });
 
     setEditingRoom(room);
     setShowForm(true);
   };
 
-  // =========================
+  // ==========================================
   // CLOSE FORM
-  // =========================
+  // ==========================================
+
   const closeForm = () => {
+    if (loading) return;
+
     setShowForm(false);
     resetForm();
   };
 
-  // =========================
+  // ==========================================
   // ADD ROOM
-  // =========================
+  // ==========================================
+
   const addRoom = async () => {
     try {
       setLoading(true);
 
-      const response = await api.post("/rooms", {
-        number: form.number,
+      const payload = {
+        number: form.number.trim(),
         type: form.type,
         price: Number(form.price),
         status: form.status,
+      };
+
+      const response = await api.post("/rooms", payload);
+
+      const newRoom = response?.data;
+
+      if (!newRoom || typeof newRoom !== "object") {
+        throw new Error("Invalid room response from server");
+      }
+
+      setRooms((prevRooms) => {
+        const safePrevRooms = Array.isArray(prevRooms) ? prevRooms : [];
+
+        return [...safePrevRooms, newRoom];
       });
-
-      console.log("Room created:", response.data);
-
-      setRooms((prevRooms) => [...prevRooms, response.data]);
 
       alert("Room added successfully!");
 
-      closeForm();
+      setShowForm(false);
+      resetForm();
     } catch (error) {
       console.error("Add room error:", error);
 
-      alert(error.response?.data?.message || "Failed to add room");
+      alert(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to add room",
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  // =========================
+  // ==========================================
   // UPDATE ROOM
-  // =========================
+  // ==========================================
+
   const updateRoom = async () => {
-    if (!editingRoom?._id) return;
+    if (!editingRoom?._id) {
+      alert("Invalid room selected.");
+      return;
+    }
 
     try {
       setLoading(true);
 
-      const response = await api.put(`/rooms/${editingRoom._id}`, {
-        number: form.number,
+      const payload = {
+        number: form.number.trim(),
         type: form.type,
         price: Number(form.price),
         status: form.status,
+      };
+
+      const response = await api.put(`/rooms/${editingRoom._id}`, payload);
+
+      const updatedRoom = response?.data;
+
+      if (!updatedRoom || typeof updatedRoom !== "object") {
+        throw new Error("Invalid room response from server");
+      }
+
+      setRooms((prevRooms) => {
+        const safePrevRooms = Array.isArray(prevRooms) ? prevRooms : [];
+
+        return safePrevRooms.map((room) =>
+          room?._id === editingRoom._id ? updatedRoom : room,
+        );
       });
-
-      console.log("Room updated:", response.data);
-
-      setRooms((prevRooms) =>
-        prevRooms.map((room) =>
-          room._id === editingRoom._id ? response.data : room,
-        ),
-      );
 
       alert("Room updated successfully!");
 
-      closeForm();
+      setShowForm(false);
+      resetForm();
     } catch (error) {
       console.error("Update room error:", error);
 
-      alert(error.response?.data?.message || "Failed to update room");
+      alert(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to update room",
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  // =========================
+  // ==========================================
   // FORM SUBMIT
-  // =========================
+  // ==========================================
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!form.number.trim()) {
+    if (loading) return;
+
+    const roomNumber = form.number.trim();
+    const price = Number(form.price);
+
+    if (!roomNumber) {
       alert("Please enter room number.");
       return;
     }
 
-    if (!form.price || Number(form.price) < 0) {
+    if (!Number.isFinite(price) || price < 0) {
       alert("Please enter a valid room price.");
       return;
     }
 
-    if (editingRoom) {
+    if (!form.type) {
+      alert("Please select room type.");
+      return;
+    }
+
+    if (!form.status) {
+      alert("Please select room status.");
+      return;
+    }
+
+    if (editingRoom?._id) {
       await updateRoom();
     } else {
       await addRoom();
     }
   };
 
-  // =========================
+  // ==========================================
   // DELETE ROOM
-  // =========================
+  // ==========================================
+
   const deleteRoom = async (id) => {
+    if (!id) {
+      alert("Invalid room ID.");
+      return;
+    }
+
+    if (loading || deletingId) return;
+
     const confirmed = window.confirm(
       "Are you sure you want to delete this room?",
     );
@@ -184,25 +258,40 @@ function Rooms({ rooms, setRooms }) {
     if (!confirmed) return;
 
     try {
-      setLoading(true);
+      setDeletingId(id);
 
       await api.delete(`/rooms/${id}`);
 
-      setRooms((prevRooms) => prevRooms.filter((room) => room._id !== id));
+      setRooms((prevRooms) => {
+        const safePrevRooms = Array.isArray(prevRooms) ? prevRooms : [];
+
+        return safePrevRooms.filter((room) => room?._id !== id);
+      });
+
+      // If deleted room was being edited, close form.
+      if (editingRoom?._id === id) {
+        setShowForm(false);
+        resetForm();
+      }
 
       alert("Room deleted successfully!");
     } catch (error) {
       console.error("Delete room error:", error);
 
-      alert(error.response?.data?.message || "Failed to delete room");
+      alert(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to delete room",
+      );
     } finally {
-      setLoading(false);
+      setDeletingId(null);
     }
   };
 
-  // =========================
+  // ==========================================
   // STATUS ICON
-  // =========================
+  // ==========================================
+
   const getStatusIcon = (status) => {
     switch (status) {
       case "Available":
@@ -219,39 +308,57 @@ function Rooms({ rooms, setRooms }) {
     }
   };
 
-  // =========================
+  // ==========================================
+  // STATUS CLASS
+  // ==========================================
+
+  const getStatusClass = (status) => {
+    return (status || "Unknown").toLowerCase().replace(/\s+/g, "-");
+  };
+
+  // ==========================================
   // SEARCH
-  // =========================
-  const filteredRooms = rooms.filter((room) => {
-    const searchValue = search.toLowerCase();
+  // ==========================================
+
+  const searchValue = search.trim().toLowerCase();
+
+  const filteredRooms = safeRooms.filter((room) => {
+    const roomNumber = String(room?.number ?? "").toLowerCase();
+    const roomType = String(room?.type ?? "").toLowerCase();
+    const roomStatus = String(room?.status ?? "").toLowerCase();
 
     return (
-      room.number?.toString().toLowerCase().includes(searchValue) ||
-      room.type?.toLowerCase().includes(searchValue) ||
-      room.status?.toLowerCase().includes(searchValue)
+      roomNumber.includes(searchValue) ||
+      roomType.includes(searchValue) ||
+      roomStatus.includes(searchValue)
     );
   });
 
-  // =========================
+  // ==========================================
   // STATISTICS
-  // =========================
-  const availableRooms = rooms.filter(
-    (room) => room.status === "Available",
+  // ==========================================
+
+  const availableRooms = safeRooms.filter(
+    (room) => room?.status === "Available",
   ).length;
 
-  const occupiedRooms = rooms.filter(
-    (room) => room.status === "Occupied",
+  const occupiedRooms = safeRooms.filter(
+    (room) => room?.status === "Occupied",
   ).length;
 
-  const maintenanceRooms = rooms.filter(
-    (room) => room.status === "Maintenance",
+  const maintenanceRooms = safeRooms.filter(
+    (room) => room?.status === "Maintenance",
   ).length;
+
+  // ==========================================
+  // RENDER
+  // ==========================================
 
   return (
     <div>
-      {/* =========================
+      {/* ========================================
           HEADER
-      ========================= */}
+      ======================================== */}
 
       <div className="page-header">
         <div>
@@ -260,18 +367,19 @@ function Rooms({ rooms, setRooms }) {
         </div>
 
         <button
+          type="button"
           className="primary-btn booking-btn"
           onClick={openAddForm}
-          disabled={loading}
+          disabled={loading || deletingId !== null}
         >
           <IonIcon icon={addOutline} />
           Add Room
         </button>
       </div>
 
-      {/* =========================
-          ROOM STATISTICS
-      ========================= */}
+      {/* ========================================
+          STATISTICS
+      ======================================== */}
 
       <div className="room-stat-grid">
         <div className="room-stat-card">
@@ -281,7 +389,7 @@ function Rooms({ rooms, setRooms }) {
 
           <div>
             <span>Total Rooms</span>
-            <strong>{rooms.length}</strong>
+            <strong>{safeRooms.length}</strong>
           </div>
         </div>
 
@@ -319,9 +427,9 @@ function Rooms({ rooms, setRooms }) {
         </div>
       </div>
 
-      {/* =========================
+      {/* ========================================
           SEARCH
-      ========================= */}
+      ======================================== */}
 
       <div className="rooms-toolbar">
         <div className="room-search">
@@ -335,89 +443,110 @@ function Rooms({ rooms, setRooms }) {
           />
         </div>
 
-        <span className="room-count">{filteredRooms.length} rooms</span>
+        <span className="room-count">
+          {filteredRooms.length} {filteredRooms.length === 1 ? "room" : "rooms"}
+        </span>
       </div>
 
-      {/* =========================
+      {/* ========================================
           ROOM GRID
-      ========================= */}
+      ======================================== */}
 
       <div className="room-grid">
-        {filteredRooms.map((room) => (
-          <div className="room-card modern-room-card" key={room._id}>
-            {/* Top */}
+        {filteredRooms.map((room, index) => {
+          const roomId = room?._id;
 
-            <div className="room-top">
-              <div className="room-number-wrapper">
-                <div className="room-main-icon">
-                  <IonIcon icon={bedOutline} />
+          const roomNumber =
+            room?.number !== undefined && room?.number !== null
+              ? room.number
+              : "N/A";
+
+          const roomType = room?.type || "Standard";
+
+          const roomStatus = room?.status || "Unknown";
+
+          const roomPrice = Number(room?.price || 0);
+
+          return (
+            <div
+              className="room-card modern-room-card"
+              key={roomId || `room-${index}`}
+            >
+              {/* Top */}
+
+              <div className="room-top">
+                <div className="room-number-wrapper">
+                  <div className="room-main-icon">
+                    <IonIcon icon={bedOutline} />
+                  </div>
+
+                  <div>
+                    <span className="room-label">ROOM</span>
+
+                    <strong className="room-number">{roomNumber}</strong>
+                  </div>
                 </div>
 
+                <span className={`room-status ${getStatusClass(roomStatus)}`}>
+                  <IonIcon icon={getStatusIcon(roomStatus)} />
+
+                  {roomStatus}
+                </span>
+              </div>
+
+              {/* Room Information */}
+
+              <div className="room-info">
                 <div>
-                  <span className="room-label">ROOM</span>
+                  <span>Room Type</span>
 
-                  <strong className="room-number">{room.number}</strong>
+                  <strong>{roomType}</strong>
+                </div>
+
+                <div className="room-price-box">
+                  <span>Price / Night</span>
+
+                  <strong>
+                    ₹
+                    {Number.isFinite(roomPrice)
+                      ? roomPrice.toLocaleString("en-IN")
+                      : "0"}
+                  </strong>
                 </div>
               </div>
 
-              <span
-                className={`room-status ${room.status
-                  ?.toLowerCase()
-                  .replace(/\s+/g, "-")}`}
-              >
-                <IonIcon icon={getStatusIcon(room.status)} />
+              {/* Actions */}
 
-                {room.status}
-              </span>
-            </div>
+              <div className="room-actions">
+                <button
+                  type="button"
+                  className="edit-room-btn"
+                  onClick={() => openEditForm(room)}
+                  disabled={loading || deletingId !== null || !roomId}
+                >
+                  <IonIcon icon={createOutline} />
+                  Edit
+                </button>
 
-            {/* Room Information */}
+                <button
+                  type="button"
+                  className="delete-room-btn"
+                  onClick={() => deleteRoom(roomId)}
+                  disabled={loading || deletingId !== null || !roomId}
+                >
+                  <IonIcon icon={trashOutline} />
 
-            <div className="room-info">
-              <div>
-                <span>Room Type</span>
-                <strong>{room.type}</strong>
-              </div>
-
-              <div className="room-price-box">
-                <span>Price / Night</span>
-
-                <strong>
-                  ₹{Number(room.price || 0).toLocaleString("en-IN")}
-                </strong>
+                  {deletingId === roomId ? "Deleting..." : "Delete"}
+                </button>
               </div>
             </div>
-
-            {/* Actions */}
-
-            <div className="room-actions">
-              <button
-                type="button"
-                className="edit-room-btn"
-                onClick={() => openEditForm(room)}
-                disabled={loading}
-              >
-                <IonIcon icon={createOutline} />
-                Edit
-              </button>
-
-              <button
-                type="button"
-                className="delete-room-btn"
-                onClick={() => deleteRoom(room._id)}
-                disabled={loading}
-              >
-                <IonIcon icon={trashOutline} />
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* =========================
+      {/* ========================================
           EMPTY STATE
-      ========================= */}
+      ======================================== */}
 
       {filteredRooms.length === 0 && (
         <div className="empty-rooms">
@@ -425,17 +554,23 @@ function Rooms({ rooms, setRooms }) {
 
           <h3>No rooms found</h3>
 
-          <p>Try changing your search or add a new room.</p>
+          <p>
+            {search
+              ? "Try changing your search."
+              : "Add a new room to get started."}
+          </p>
         </div>
       )}
 
-      {/* =========================
+      {/* ========================================
           ADD / EDIT MODAL
-      ========================= */}
+      ======================================== */}
 
       {showForm && (
         <div className="modal-backdrop">
           <div className="booking-modal room-modal">
+            {/* Modal Header */}
+
             <div className="modal-header">
               <div>
                 <h2>{editingRoom ? "Edit Room" : "Add New Room"}</h2>
@@ -457,22 +592,26 @@ function Rooms({ rooms, setRooms }) {
               </button>
             </div>
 
+            {/* Form */}
+
             <form onSubmit={handleSubmit}>
               <div className="booking-form-grid">
                 {/* Room Number */}
 
                 <div className="form-field">
-                  <label>Room Number</label>
+                  <label htmlFor="room-number">Room Number</label>
 
                   <div className="input-icon">
                     <IonIcon icon={bedOutline} />
 
                     <input
+                      id="room-number"
                       name="number"
                       value={form.number}
                       onChange={handleChange}
                       placeholder="107"
                       required
+                      disabled={loading}
                     />
                   </div>
                 </div>
@@ -480,15 +619,17 @@ function Rooms({ rooms, setRooms }) {
                 {/* Room Type */}
 
                 <div className="form-field">
-                  <label>Room Type</label>
+                  <label htmlFor="room-type">Room Type</label>
 
                   <div className="input-icon">
                     <IonIcon icon={bedOutline} />
 
                     <select
+                      id="room-type"
                       name="type"
                       value={form.type}
                       onChange={handleChange}
+                      disabled={loading}
                     >
                       <option value="Standard">Standard</option>
 
@@ -502,19 +643,22 @@ function Rooms({ rooms, setRooms }) {
                 {/* Price */}
 
                 <div className="form-field">
-                  <label>Price / Night</label>
+                  <label htmlFor="room-price">Price / Night</label>
 
                   <div className="input-icon">
                     <span className="currency-icon">₹</span>
 
                     <input
+                      id="room-price"
                       type="number"
                       name="price"
                       value={form.price}
                       onChange={handleChange}
                       placeholder="3000"
                       min="0"
+                      step="0.01"
                       required
+                      disabled={loading}
                     />
                   </div>
                 </div>
@@ -522,15 +666,17 @@ function Rooms({ rooms, setRooms }) {
                 {/* Status */}
 
                 <div className="form-field">
-                  <label>Room Status</label>
+                  <label htmlFor="room-status">Room Status</label>
 
                   <div className="input-icon">
                     <IonIcon icon={checkmarkCircleOutline} />
 
                     <select
+                      id="room-status"
                       name="status"
                       value={form.status}
                       onChange={handleChange}
+                      disabled={loading}
                     >
                       <option value="Available">Available</option>
 

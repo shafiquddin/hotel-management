@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import api from "../api/api";
 
 function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
@@ -18,9 +18,11 @@ function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
   // FORM CHANGE
   // ==============================
   const handleChange = (e) => {
+    const { name, value } = e.target;
+
     setForm((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: value,
     }));
   };
 
@@ -38,13 +40,75 @@ function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
   };
 
   // ==============================
+  // OPEN MODAL
+  // ==============================
+  const openBookingModal = () => {
+    resetForm();
+    setShowForm(true);
+  };
+
+  // ==============================
+  // CLOSE MODAL
+  // ==============================
+  const closeBookingModal = () => {
+    if (loading) return;
+
+    resetForm();
+    setShowForm(false);
+  };
+
+  // ==============================
+  // ESCAPE KEY
+  // ==============================
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === "Escape" && showForm && !loading) {
+        closeBookingModal();
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [showForm, loading]);
+
+  // ==============================
   // CREATE BOOKING
   // ==============================
   const addBooking = async (e) => {
     e.preventDefault();
 
+    if (loading) return;
+
+    if (!form.guest) {
+      alert("Please select a guest.");
+      return;
+    }
+
+    if (!form.room) {
+      alert("Please select a room.");
+      return;
+    }
+
+    if (!form.checkIn) {
+      alert("Please select check-in date.");
+      return;
+    }
+
+    if (!form.checkOut) {
+      alert("Please select check-out date.");
+      return;
+    }
+
     if (form.checkOut <= form.checkIn) {
       alert("Check-out date must be after check-in date.");
+      return;
+    }
+
+    if (!form.amount || Number(form.amount) <= 0) {
+      alert("Please enter a valid amount.");
       return;
     }
 
@@ -59,31 +123,10 @@ function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
         amount: Number(form.amount),
       });
 
-      console.log("Created booking:", response.data);
-
-      /*
-       * The backend should return:
-       *
-       * {
-       *   _id: "...",
-       *   guest: {
-       *     _id: "...",
-       *     name: "Rahul Sharma",
-       *     email: "...",
-       *     phone: "..."
-       *   },
-       *   room: {
-       *     _id: "...",
-       *     number: "102",
-       *     type: "Deluxe"
-       *   },
-       *   ...
-       * }
-       */
-
+      // Add new booking
       setBookings((prevBookings) => [response.data, ...prevBookings]);
 
-      // Mark room as occupied
+      // Mark room occupied
       setRooms((prevRooms) =>
         prevRooms.map((room) =>
           room._id === form.room
@@ -95,10 +138,12 @@ function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
         ),
       );
 
-      alert("Booking created successfully!");
-
+      // IMPORTANT:
+      // Close modal BEFORE alert
       resetForm();
       setShowForm(false);
+
+      alert("Booking created successfully!");
     } catch (error) {
       console.error("Create booking error:", error);
 
@@ -112,6 +157,8 @@ function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
   // DELETE BOOKING
   // ==============================
   const deleteBooking = async (id) => {
+    if (loading) return;
+
     const confirmed = window.confirm(
       "Are you sure you want to delete this booking?",
     );
@@ -119,6 +166,8 @@ function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
     if (!confirmed) return;
 
     try {
+      setLoading(true);
+
       await api.delete(`/bookings/${id}`);
 
       setBookings((prevBookings) =>
@@ -130,6 +179,8 @@ function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
       console.error("Delete booking error:", error);
 
       alert(error.response?.data?.message || "Failed to delete booking");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -137,6 +188,8 @@ function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
   // CHECK IN
   // ==============================
   const checkInBooking = async (id) => {
+    if (loading) return;
+
     try {
       setLoading(true);
 
@@ -144,10 +197,6 @@ function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
 
       const updatedBooking = response.data;
 
-      /*
-       * If backend returns only IDs after check-in,
-       * preserve the existing populated guest/room.
-       */
       setBookings((prevBookings) =>
         prevBookings.map((booking) => {
           if (booking._id !== id) {
@@ -173,7 +222,6 @@ function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
         }),
       );
 
-      // Get room ID safely
       const roomId =
         typeof updatedBooking.room === "object"
           ? updatedBooking.room?._id
@@ -206,6 +254,8 @@ function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
   // CHECK OUT
   // ==============================
   const checkOutBooking = async (id) => {
+    if (loading) return;
+
     try {
       setLoading(true);
 
@@ -238,7 +288,6 @@ function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
         }),
       );
 
-      // Get room ID safely
       const roomId =
         typeof updatedBooking.room === "object"
           ? updatedBooking.room?._id
@@ -271,7 +320,7 @@ function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
   // SEARCH
   // ==============================
   const filteredBookings = bookings.filter((booking) => {
-    const searchText = search.toLowerCase();
+    const searchText = search.toLowerCase().trim();
 
     return (
       booking.guest?.name?.toLowerCase().includes(searchText) ||
@@ -293,135 +342,163 @@ function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
           <p>Manage reservations and guest stays.</p>
         </div>
 
-        <button
-          className="primary-btn"
-          onClick={() => {
-            resetForm();
-            setShowForm(true);
-          }}
-        >
+        <button className="primary-btn" onClick={openBookingModal}>
           + New Booking
         </button>
       </div>
 
       {/* ==============================
-          CREATE BOOKING FORM
+          BOOKING MODAL
       ============================== */}
 
       {showForm && (
-        <form className="form-panel" onSubmit={addBooking}>
-          <h2>Create Booking</h2>
+        <div
+          className="booking-modal-overlay"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !loading) {
+              closeBookingModal();
+            }
+          }}
+        >
+          <div
+            className="booking-modal"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
 
-          <div className="form-grid">
-            {/* Guest */}
+            <div className="booking-modal-header">
+              <div>
+                <h2>Create Booking</h2>
+                <p>Add a new hotel reservation</p>
+              </div>
 
-            <div>
-              <label>Guest</label>
-
-              <select
-                name="guest"
-                value={form.guest}
-                onChange={handleChange}
-                required
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={closeBookingModal}
+                disabled={loading}
+                aria-label="Close"
               >
-                <option value="">Select guest</option>
-
-                {guests.map((guest) => (
-                  <option key={guest._id} value={guest._id}>
-                    {guest.name}
-                  </option>
-                ))}
-              </select>
+                ×
+              </button>
             </div>
 
-            {/* Room */}
+            {/* Form */}
 
-            <div>
-              <label>Room</label>
+            <form onSubmit={addBooking}>
+              <div className="form-grid">
+                {/* Guest */}
 
-              <select
-                name="room"
-                value={form.room}
-                onChange={handleChange}
-                required
-              >
-                <option value="">Select room</option>
+                <div>
+                  <label>Guest</label>
 
-                {rooms
-                  .filter((room) => room.status === "Available")
-                  .map((room) => (
-                    <option key={room._id} value={room._id}>
-                      Room {room.number} - {room.type}
-                    </option>
-                  ))}
-              </select>
-            </div>
+                  <select
+                    name="guest"
+                    value={form.guest}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="">Select guest</option>
 
-            {/* Check In */}
+                    {guests.map((guest) => (
+                      <option key={guest._id} value={guest._id}>
+                        {guest.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div>
-              <label>Check In</label>
+                {/* Room */}
 
-              <input
-                type="date"
-                name="checkIn"
-                value={form.checkIn}
-                onChange={handleChange}
-                required
-              />
-            </div>
+                <div>
+                  <label>Room</label>
 
-            {/* Check Out */}
+                  <select
+                    name="room"
+                    value={form.room}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="">Select room</option>
 
-            <div>
-              <label>Check Out</label>
+                    {rooms
+                      .filter((room) => room.status === "Available")
+                      .map((room) => (
+                        <option key={room._id} value={room._id}>
+                          Room {room.number} - {room.type}
+                        </option>
+                      ))}
+                  </select>
+                </div>
 
-              <input
-                type="date"
-                name="checkOut"
-                value={form.checkOut}
-                onChange={handleChange}
-                required
-              />
-            </div>
+                {/* Check In */}
 
-            {/* Amount */}
+                <div>
+                  <label>Check In</label>
 
-            <div>
-              <label>Total Amount</label>
+                  <input
+                    type="date"
+                    name="checkIn"
+                    value={form.checkIn}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
 
-              <input
-                type="number"
-                name="amount"
-                value={form.amount}
-                onChange={handleChange}
-                placeholder="5000"
-                min="0"
-                required
-              />
-            </div>
+                {/* Check Out */}
+
+                <div>
+                  <label>Check Out</label>
+
+                  <input
+                    type="date"
+                    name="checkOut"
+                    value={form.checkOut}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                {/* Amount */}
+
+                <div>
+                  <label>Total Amount</label>
+
+                  <input
+                    type="number"
+                    name="amount"
+                    value={form.amount}
+                    onChange={handleChange}
+                    placeholder="5000"
+                    min="0"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+
+              <div className="booking-modal-footer">
+                <button
+                  type="button"
+                  className="delete-btn"
+                  onClick={closeBookingModal}
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={loading}
+                >
+                  {loading ? "Creating..." : "Create Booking"}
+                </button>
+              </div>
+            </form>
           </div>
-
-          {/* Form buttons */}
-
-          <div className="action-buttons">
-            <button
-              type="button"
-              className="delete-btn"
-              onClick={() => {
-                resetForm();
-                setShowForm(false);
-              }}
-              disabled={loading}
-            >
-              Cancel
-            </button>
-
-            <button type="submit" className="primary-btn" disabled={loading}>
-              {loading ? "Creating..." : "Create Booking"}
-            </button>
-          </div>
-        </form>
+        </div>
       )}
 
       {/* ==============================
@@ -429,11 +506,9 @@ function Bookings({ bookings, setBookings, rooms, guests, setRooms }) {
       ============================== */}
 
       <div className="panel">
-        {/* Search */}
-
         <div className="search-box">
           <input
-            placeholder="Search by guest name..."
+            placeholder="Search by guest name, room or status..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
