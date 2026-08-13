@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { IonIcon } from "@ionic/react";
+
 import {
   addOutline,
   bedOutline,
   checkmarkCircleOutline,
   peopleOutline,
   cashOutline,
+  searchOutline,
 } from "ionicons/icons";
 
 import StatCard from "../components/StatCard";
@@ -19,18 +21,19 @@ function Dashboard({
   setRooms,
 }) {
   const [showBooking, setShowBooking] = useState(false);
+  const [searchBooking, setSearchBooking] = useState("");
 
-  // ------------------------------------
+  // =========================================
   // SAFE ARRAYS
-  // ------------------------------------
+  // =========================================
 
   const safeRooms = Array.isArray(rooms) ? rooms : [];
   const safeBookings = Array.isArray(bookings) ? bookings : [];
   const safeGuests = Array.isArray(guests) ? guests : [];
 
-  // ------------------------------------
+  // =========================================
   // ROOM STATISTICS
-  // ------------------------------------
+  // =========================================
 
   const totalRooms = safeRooms.length;
 
@@ -42,9 +45,9 @@ function Dashboard({
     (room) => room?.status === "Occupied",
   ).length;
 
-  // ------------------------------------
+  // =========================================
   // REVENUE
-  // ------------------------------------
+  // =========================================
 
   const revenue = safeBookings.reduce((total, booking) => {
     const amount = Number(booking?.amount);
@@ -52,9 +55,9 @@ function Dashboard({
     return total + (Number.isFinite(amount) ? amount : 0);
   }, 0);
 
-  // ------------------------------------
+  // =========================================
   // SAFE HELPERS
-  // ------------------------------------
+  // =========================================
 
   const getGuestName = (booking) => {
     if (!booking?.guest) {
@@ -66,7 +69,7 @@ function Dashboard({
       return booking.guest?.name || "N/A";
     }
 
-    // If backend returns just an ID
+    // Backend returned only guest ID
     return "N/A";
   };
 
@@ -80,7 +83,7 @@ function Dashboard({
       return booking.room?.number || "N/A";
     }
 
-    // If backend returns only room ID
+    // Backend returned only room ID
     return "N/A";
   };
 
@@ -126,11 +129,57 @@ function Dashboard({
     return amount.toLocaleString("en-IN");
   };
 
+  // =========================================
+  // SEARCH + SORT RECENT BOOKINGS
+  // =========================================
+
+  const filteredBookings = [...safeBookings]
+    .sort((a, b) => {
+      const dateA = new Date(a?.checkIn || 0).getTime();
+      const dateB = new Date(b?.checkIn || 0).getTime();
+
+      return dateB - dateA;
+    })
+    .filter((booking) => {
+      const search = searchBooking.trim().toLowerCase();
+
+      if (!search) {
+        return true;
+      }
+
+      const guestName = getGuestName(booking).toLowerCase();
+
+      const roomNumber = String(getRoomNumber(booking)).toLowerCase();
+
+      const status = getStatus(booking).toLowerCase();
+
+      const checkIn = getCheckInDate(booking).toLowerCase();
+
+      const amount = getAmount(booking).toLowerCase();
+
+      return (
+        guestName.includes(search) ||
+        roomNumber.includes(search) ||
+        status.includes(search) ||
+        checkIn.includes(search) ||
+        amount.includes(search)
+      );
+    })
+    .slice(0, 10);
+
+  // =========================================
+  // CLEAR SEARCH
+  // =========================================
+
+  const handleClearSearch = () => {
+    setSearchBooking("");
+  };
+
   return (
-    <div>
-      {/* =========================
+    <div className="dashboard-page">
+      {/* =========================================
           HEADER
-      ========================= */}
+      ========================================= */}
 
       <div className="page-header">
         <div>
@@ -147,13 +196,14 @@ function Dashboard({
           onClick={() => setShowBooking(true)}
         >
           <IonIcon icon={addOutline} />
-          New Booking
+
+          <span>New Booking</span>
         </button>
       </div>
 
-      {/* =========================
+      {/* =========================================
           STATISTICS
-      ========================= */}
+      ========================================= */}
 
       <div className="stats-grid">
         <StatCard
@@ -181,28 +231,73 @@ function Dashboard({
         />
       </div>
 
-      {/* =========================
+      {/* =========================================
           DASHBOARD GRID
-      ========================= */}
+      ========================================= */}
 
       <div className="dashboard-grid">
-        {/* =========================
+        {/* =========================================
             RECENT BOOKINGS
-        ========================= */}
+        ========================================= */}
 
-        <div className="panel">
-          <div className="panel-header">
-            <div>
+        <div className="panel recent-bookings-panel">
+          {/* HEADER */}
+
+          <div className="panel-header recent-bookings-header">
+            <div className="recent-bookings-title">
               <h2>Recent Bookings</h2>
+
               <p>Latest hotel reservations</p>
             </div>
 
-            <button type="button" className="view-btn">
-              View All
-            </button>
+            {/* SEARCH + VIEW ALL */}
+
+            <div className="booking-actions">
+              <div className="booking-search">
+                <IonIcon icon={searchOutline} />
+
+                <input
+                  type="text"
+                  placeholder="Search bookings..."
+                  value={searchBooking}
+                  onChange={(event) => setSearchBooking(event.target.value)}
+                  aria-label="Search bookings"
+                />
+
+                {searchBooking && (
+                  <button
+                    type="button"
+                    className="clear-search"
+                    onClick={handleClearSearch}
+                    aria-label="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              <button type="button" className="view-btn">
+                View All
+              </button>
+            </div>
           </div>
 
-          <div className="table-container">
+          {/* SEARCH RESULT INFO */}
+
+          {searchBooking && (
+            <div className="search-result-info">
+              Searching for:
+              <strong>"{searchBooking}"</strong>
+              <span>
+                {filteredBookings.length} result
+                {filteredBookings.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+          )}
+
+          {/* TABLE */}
+
+          <div className="table-container booking-table-container">
             <table>
               <thead>
                 <tr>
@@ -215,29 +310,29 @@ function Dashboard({
               </thead>
 
               <tbody>
-                {safeBookings.length === 0 ? (
+                {filteredBookings.length === 0 ? (
                   <tr>
-                    <td colSpan="5" style={{ textAlign: "center" }}>
-                      No bookings found.
+                    <td colSpan="5" className="no-bookings">
+                      {searchBooking
+                        ? "No bookings match your search."
+                        : "No bookings found."}
                     </td>
                   </tr>
                 ) : (
-                  safeBookings.map((booking, index) => {
+                  filteredBookings.map((booking, index) => {
                     const guestName = getGuestName(booking);
+
                     const roomNumber = getRoomNumber(booking);
+
                     const status = getStatus(booking);
 
-                    /*
-                     * _id should normally always exist.
-                     * index is only a fallback so a malformed API
-                     * response doesn't cause a React key warning.
-                     */
                     const bookingKey =
                       booking?._id || booking?.id || `booking-${index}`;
 
                     return (
                       <tr key={bookingKey}>
-                        {/* Guest */}
+                        {/* GUEST */}
+
                         <td>
                           <div className="guest-cell">
                             <div className="avatar">
@@ -248,18 +343,22 @@ function Dashboard({
                           </div>
                         </td>
 
-                        {/* Room */}
+                        {/* ROOM */}
+
                         <td>
                           {roomNumber === "N/A" ? "N/A" : `Room ${roomNumber}`}
                         </td>
 
-                        {/* Check In */}
+                        {/* CHECK IN */}
+
                         <td>{getCheckInDate(booking)}</td>
 
-                        {/* Amount */}
+                        {/* AMOUNT */}
+
                         <td>₹{getAmount(booking)}</td>
 
-                        {/* Status */}
+                        {/* STATUS */}
+
                         <td>
                           <span className={`badge ${getStatusClass(booking)}`}>
                             {status}
@@ -274,14 +373,15 @@ function Dashboard({
           </div>
         </div>
 
-        {/* =========================
+        {/* =========================================
             REVENUE
-        ========================= */}
+        ========================================= */}
 
         <div className="panel revenue-panel">
           <div className="panel-header">
             <div>
               <h2>Revenue</h2>
+
               <p>Current booking revenue</p>
             </div>
 
@@ -302,14 +402,16 @@ function Dashboard({
 
           <div className="revenue-footer">
             <span>Monthly target</span>
+
             <strong>75%</strong>
           </div>
         </div>
       </div>
 
-      {/* =========================
+      {/* =========================================
           NEW BOOKING MODAL
-      ========================= */}
+      ========================================= */}
+
       {showBooking && (
         <NewBooking
           rooms={rooms}
