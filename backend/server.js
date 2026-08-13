@@ -27,14 +27,12 @@ connectDB();
 const allowedOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
-  process.env.CLIENT_URL,
-].filter(Boolean);
+  "https://hotel-management-rho-brown.vercel.app",
+];
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests without an origin
-      // e.g. Postman
       if (!origin) {
         return callback(null, true);
       }
@@ -43,9 +41,12 @@ app.use(
         return callback(null, true);
       }
 
+      console.log("CORS blocked:", origin);
       return callback(new Error(`CORS blocked: ${origin}`));
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
