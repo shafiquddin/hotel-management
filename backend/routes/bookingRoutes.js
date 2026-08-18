@@ -1,7 +1,6 @@
-const express = require("express");
-
-const Booking = require("../models/Booking");
-const Room = require("../models/Room");
+import express from "express";
+import Booking from "../models/Booking.js";
+import Room from "../models/Room.js";
 
 const router = express.Router();
 

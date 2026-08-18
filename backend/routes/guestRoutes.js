@@ -1,5 +1,5 @@
-const express = require("express");
-const Guest = require("../models/Guest");
+import express from "express";
+import Guest from "../models/Guest.js";
 
 const router = express.Router();
 
